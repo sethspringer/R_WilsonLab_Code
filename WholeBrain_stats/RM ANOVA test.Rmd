@@ -12,11 +12,9 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ```{r enter data}
 
-library(datarium)
 library(tibble)
 
-data("selfesteem", package = "datarium")
-head(selfesteem, 3)
+
 
 
 
@@ -25,23 +23,57 @@ library(rstatix)
 library(tidyverse)
 
 
-parID = c('M352','M382','M474','M473','M274','M385','M936')
-cond1 = c(1,4,6,7,3,2,7)
+parID = c('M1','M2','M3','M4','M5','M6','M7')
+cond1 = c(1,4,5,6,3,2,7)
 cond2 = c(3,6,2,1,5,7,5)
 cond3 = c(6,2,7,8,1,3,9)
 
-df = data.frame(parID,cond1,cond2,cond3)
+covariate = c(3,2,6,24,2,7,2)
+
+df = data.frame(parID,cond1,cond2,cond3,covariate)
 #df = as_tibble(df)
 
 df <- df %>%
   gather(key = "condition", value = "pseudoT", cond1, cond2, cond3) %>%
   convert_as_factor(parID, condition)
 
-head(df, 3)
 
 
 ```
 
+
+```{r run ANOVA}
+
+#res.aov <- anova_test(data = df, dv = pseudoT, wid = parID, within = condition)
+#get_anova_table(res.aov)
+
+#res.aov$ANOVA$F
+
+
+
+model <- aov(pseudoT~condition+Error(parID/condition), data = df) #condition is the RM and it is nested under each participant (parID)
+
+
+summary(model)
+
+
+
+
+model_cov <- aov(pseudoT~condition*covariate+Error(parID/(condition)), data = df) #condition is the RM and it is nested under each participant (parID)
+
+
+summary(model_cov)
+
+
+
+
+
+
+
+
+
+
+```
 
 ```{r run ANOVA}
 
@@ -51,6 +83,36 @@ get_anova_table(res.aov)
 res.aov$ANOVA$F
 
 
-```
+res.aov <- anova_test(data = df, dv = pseudoT, wid = parID, within = condition, covariate = covariate)
+get_anova_table(res.aov)
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+res.aov$ANOVA$F
+
+
+
+
+
+
+
+
+
+
+
+ library(reshape2)
+ 
+
+ 
+ active_long <- melt(active,
+     id.vars=c("id", "sex"),
+     measure.vars=c("hvltt", "hvltt2", "hvltt3", "hvltt4"),
+     variable.name="time",
+     value.name="hvltt")
+
+
+
+
+
+
+
+
+```
