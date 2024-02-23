@@ -1,0 +1,190 @@
+---
+title: "Moderation"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+
+
+#Whole brain stats 
+library(oro.nifti) #Necessary to read NIIs
+library(openxlsx)
+library(tibble)
+library(tidyverse)
+library(rstatix)
+#library(profvis)
+library(mediation)
+library(bda)
+
+
+setwd('D:')
+
+
+condition1_files = choose.files(default = "", caption = "Select NIIs for condition 1 participants", multi = TRUE, filters = "*.nii")
+data = read.csv(choose.files(default = "", caption = "Select CSV file with moderator and y values", multi = TRUE, filters = "*.csv"))
+
+
+
+save_path = choose.dir(caption = 'Select the directory to save the statistical output')
+
+
+
+```
+
+
+```{r}
+
+
+#Effectively reading and loading one file
+img <- readNIfTI(condition1_files[1])
+img_data = img@.Data
+hdr = nifti_header(condition1_files[1])
+dimensions = dim(img@.Data) #obtain the dimensions nicely
+
+n_participants = length(condition1_files)
+
+#Create a temp ID array for the ANOVA. Could use the actual GUID but this is more generalizable because we don't know GUID length 
+tempID = 1:n_participants
+
+
+#Preallocate 4D matrix
+full_4D_matrix_c1 <- array(c(0), dim = c(dimensions[1], dimensions[2], dimensions[3], n_participants))
+
+
+#Preallocate stats matrix
+
+F_stat_map <- array(c(0), dim = c(dimensions[1], dimensions[2], dimensions[3]))
+
+
+
+
+
+
+
+#test interaction
+
+mod = data$Age
+
+y = data$group_correct_RT_OE
+
+
+
+
+#Create a 4D matrix with brain data
+for (i in 1:n_participants)
+{
+  #Assume that files are organized the same based on parID across conditions!! 
+  
+  #Load in pseudo-t for condition 1
+  img_temp <- readNIfTI(condition1_files[i])
+  img_data_temp = img_temp@.Data
+  
+  full_4D_matrix_c1[ , , ,i] = img_data_temp
+  
+  rm(img_temp)
+  
+  
+}
+
+
+#Preallocate temp vectors
+x = replicate(n_participants,0)
+
+
+
+```
+
+
+```{r}
+
+
+stats_counter = 1
+
+pb <- winProgressBar(title = "Calculating voxel-wise statistics", min = 0, max = 1, initial = 0)
+
+for (X_current in 1: dimensions[1]) 
+{
+  for (Y_current in 1: dimensions[2])
+  {
+    for (Z_current in 1: dimensions[3])
+    {
+      
+      #(paste('X: ', X_current)) 
+      #print(paste('Y: ', Y_current)) 
+      #print(paste('Z: ', Z_current)) 
+      
+      
+      info <- sprintf("%d%% done", round(X_current/dimensions[1]))
+      setWinProgressBar(pb, X_current/dimensions[1], label=info)
+      
+      x = full_4D_matrix_c1[X_current,Y_current,Z_current,]
+
+      
+      #To avoid NANs and make more effecient!
+      if (sum(x) == 0) { 
+        
+        #do nothing
+
+        
+      } else  {
+        
+        model = lm(y~x*mod)
+        model_summary = summary(model)
+        
+        
+        t_value = coef(model_summary)[4 , 3]
+          
+        F_stat_map[X_current, Y_current, Z_current] = t_value^2
+        
+        
+        #only once, pull the degrees of freedom once
+       if (stats_counter ==  1) {
+          df_1 = 1
+          df_2 = model_summary$df[2]
+          
+          stats_counter = stats_counter+1
+        }
+        
+
+        
+        }
+        
+        
+        
+      }
+    }
+  }
+
+
+close(pb)
+
+
+```
+
+
+```{r}
+
+F_stat_output_name = paste('WholeBrainInteraction_F_values_', '_df_', df_1, '_',df_2,sep = '')
+
+#Write out the F stats brain
+pixdim = pixdim(img)
+img.nifti = as.nifti(from = F_stat_map, value = hdr,  verbose = FALSE) 
+img.nifti@reoriented = T
+fname = file.path(path = save_path, F_stat_output_name)
+writeNIfTI(nim =img.nifti, fname, gzipped = FALSE) #gzipped = false to prevent the .nz in the file
+
+  
+
+```
+
+
+
+
+
+
+
